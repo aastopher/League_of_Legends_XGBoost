@@ -1,0 +1,280 @@
+---
+title: "League of Legends XGboost Model"
+author: "Aaron Stopher, Luke Moore, Kristoffer Sorensen"
+date: '2022-03-04'
+output:
+  rmarkdown: github_document
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+## R Library Imports
+```{r setup, results="hide"}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(xgboost)
+library(Matrix)
+library(stats)
+library(data.table)
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(Ckmeans.1d.dp)
+library(rpart)
+library(rpart.plot)
+library(pROC)
+```
+
+## Github Library Imports
+```{r github import, results="hide"}
+install.packages("devtools") 
+library(devtools) 
+install_github("AppliedDataSciencePartners/xgboostExplainer")
+library(xgboostExplainer)
+```
+
+## Import & Format Data
+```{r importing & formatting data}
+# Raw Import
+dat<-read.csv("Allstatshead.csv", header=TRUE, sep=",")
+
+# Subset data
+data.all <- subset(dat, select =c("win","player","item1","trinket","kills","deaths","assists","ownjunglekills","enemyjunglekills","visionscore","firstblood"))
+
+# Change player,item1, and trinket to factors
+data.all$player <- as.factor(data.all$player)
+data.all$item1 <- as.factor(data.all$item1)
+data.all$trinket <- as.factor(data.all$trinket)
+
+# Check Dataframe
+str(data.all)
+```
+
+## Creating Train & Test Data
+```{r splitting data}
+# Set seed for repeatable results
+set.seed(123456)
+
+# Split data 70-30
+data.split <- sample(sample(c(rep(1, 0.7 * nrow(data.all)),rep(0, 0.3 * nrow(data.all)))))
+
+# Set training and test set respectively
+dat.train <- data.all[data.split==1,] 
+dat.test <- data.all[data.split==0,] 
+
+# Prepare for matrix
+setDT(dat.train)
+setDT(dat.test)
+
+# Create train matrix and response vector
+train <- model.matrix(~.+0,data = dat.train[,-c("win"),with=F])
+trainresults <- dat.train$win
+
+# Create test matrix and response vector
+test <- model.matrix(~.+0,data = dat.test[,-c("win"),with=F])
+testresults <- dat.test$win
+```
+
+## Training a Decision Tree
+```{r training tree model}
+# This block will train a tree model and output the resulting modeled tree graphs. This will help us visualize a clear path a particular record may take and what the prediction would be.
+
+# Create folds for response vector
+cv <- createFolds(trainresults, k = 10)
+
+# Train Tree with Cross-Validation
+tree.cv <- train(x = train, y = as.factor(trainresults), method = "rpart2", tuneLength = 4, # Note that y MUST be as factor!
+                 trControl = trainControl(method = "cv",index = cv), control = rpart.control())
+tree.model = tree.cv$finalModel
+```
+
+## Plot Trees
+```{r plotting trees 1}
+rpart.plot(tree.model,type = 2,extra = 7,fallen.leaves = T, main='Tree win probabilities') # extra = 7: the probability of the second class only. Useful for binary responses.
+```
+
+<span style="text-align:center; font-weight:bold;">Plot showing the probability of win outcome at each node</span>
+
+```{r plotting trees 2}
+rpart.plot(tree.model,type = 2,extra = 2,fallen.leaves = T, main='Tree classification rate') # extra = 2: display the classification rate at the node, expressed as the number of correct classifications and the number of observations in the node.
+```
+
+<span style="text-align:center; font-weight:bold;">Plot showing the classification rate at each node</span>
+
+```{r creating tree predictions}
+# Make Predictions based off our trained tree model
+tree.preds = predict(tree.model, as.data.frame(test))[,2]
+tree.roc_obj <- roc(testresults, tree.preds)
+```
+
+### Model Accuracy Results
+```{r tree accuracy results}
+cat("Tree AUC ", auc(tree.roc_obj))
+```
+
+## Training an XGBoost Model
+```{r training xgboost model, results="hide"}
+# WARNING: Block will take a while to run!
+
+# This block will train an XGBoost model and output an AUC model accuracy metric comparison against the tree model. This is meant to illustrate the model accuracy improvement when using gradient boosting, specifically XGBoost.
+
+# Format our train data for the model
+xgb.train.data = xgb.DMatrix(train, label = trainresults, missing = NA)
+
+# Define what type of prediction we are doing
+param <- list(objective = "binary:logistic", base_score = 0.5)
+
+# Train our XGBoost model with Cross-Validation
+xgboost.cv = xgb.cv(param=param, data = xgb.train.data, folds = cv, nrounds = 1500, early_stopping_rounds = 100, metrics='auc')
+best_iteration = xgboost.cv$best_iteration
+
+# Create XGBoost model object with our best_iteration
+xgb.model <- xgboost(param=param, data=xgb.train.data, nrounds=best_iteration)
+
+# Format our test data for prediction
+xgb.test.data = xgb.DMatrix(test, missing = NA)
+
+# Make Predictions based off our trained XGBoost model
+xgb.preds = predict(xgb.model, xgb.test.data)
+xgb.roc_obj <- roc(testresults, xgb.preds)
+```
+
+### Model Accuracy Results
+```{r model accuracy comparison}
+cat("Tree AUC ", auc(tree.roc_obj))
+cat("XGB AUC ", auc(xgb.roc_obj))
+```
+
+## XGBoost Importance Matrix
+```{r generating xgboost importance matrix}
+# For the purposes of visualization we are going to grab just the top (most predictive) features.
+
+# Define number of top features we would like to use in our reduced model.
+top_n_features = 10
+
+# Create importance matrix
+col_names = attr(xgb.train.data, ".Dimnames")[[2]]
+importance_matrix <- xgb.importance(col_names,xgb.model)
+```
+
+```{r plotting importance matrix gain}
+# Plot Features in order of importance based on the 'Gain' measurement
+gg <- xgb.ggplot.importance(importance_matrix, top_n = top_n_features, measure = "Gain", rel_to_first = TRUE)
+gg + ggplot2::ylab("Importance")
+```
+
+<span style="text-align:center; font-weight:bold;">This plot will help us identify the most important predictive features</span>
+
+```{r plotting importance matrix frequency}
+# Plot Features in order of importance based on the 'Frequency' measurement
+gg <- xgb.ggplot.importance(importance_matrix, top_n = top_n_features, measure = "Frequency", rel_to_first = TRUE)
+gg + ggplot2::ylab("Frequency") + ggtitle('Feature frequency')
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows an arguably more accurate representation of the 'weightiness' of each feature in the model</span>
+
+## Re-Train XGBoost with reduced importance model
+```{r training reduced xgboost model, results="hide"}
+# WARNING: Block will take a while to run!
+
+# Create reduced Dataframe for the purposes of visualizing our model further
+reduced_imp <- head(importance_matrix[order(importance_matrix$Frequency, decreasing=TRUE), ], top_n_features)
+train.reduced <- train[,reduced_imp$Feature]
+test.reduced <- test[,reduced_imp$Feature]
+
+# Format our reduced train data for the model
+xgb.train.data.reduced = xgb.DMatrix(train.reduced, label = trainresults, missing = NA)
+
+# Define what type of prediction we are doing
+param <- list(objective = "binary:logistic", base_score = 0.5)
+
+# Train our XGBoost model with Cross-Validation
+xgboost.cv.reduced = xgb.cv(param=param, data = xgb.train.data.reduced, folds = cv, nrounds = 1500, early_stopping_rounds = 100, metrics='auc')
+best_iteration = xgboost.cv.reduced$best_iteration
+
+# Create XGBoost reduced model object with our best_iteration
+xgb.model.reduced <- xgboost(param =param,  data = xgb.train.data.reduced, nrounds=best_iteration)
+
+# Format our reduced test data for prediction
+xgb.test.data.reduced = xgb.DMatrix(test.reduced, missing = NA)
+
+# Make Predictions based off our trained XGBoost reduced model
+xgb.preds.reduced = predict(xgb.model.reduced, xgb.test.data.reduced)
+xgb.roc_obj.reduced <- roc(testresults, xgb.preds.reduced)
+```
+### Model Accuracy Results
+```{r reduced model accuracy comparison}
+cat("Tree AUC ", auc(tree.roc_obj))
+cat("XGB AUC ", auc(xgb.roc_obj.reduced))
+```
+
+## XGBoost Explainer Visuals
+```{r building xgboost explainer objects, results="hide"}
+# WARNING: Block will take a while to run!
+
+# Create a model explainer object and prediction breakdown object for visualization.
+explainer = buildExplainer(xgb.model.reduced,xgb.train.data.reduced, type="binary", base_score = 0.5, trees_idx = NULL)
+pred.breakdown = explainPredictions(xgb.model.reduced, explainer, xgb.test.data.reduced)
+```
+
+## Converting log-odds to probabilities
+```{r converting log-odds to probabilities}
+# Get weights for log-odds conversion
+weights = rowSums(pred.breakdown)
+
+# Convert log-odds to probabilities
+pred.xgb.odds = 1/(1+exp(-weights))
+
+# List the maximum predicted win probability
+cat(max(xgb.preds.reduced-pred.xgb.odds),'\n')
+```
+
+## Produce a waterfall chart for the last predicted record
+
+```{r creating waterfall chart}
+# Define row index
+idx_to_get = as.integer(nrow(test.reduced))
+
+# Create waterfall plot for a specific record and it's associated prediction weights by feature
+showWaterfall(xgb.model.reduced, explainer, xgb.test.data.reduced,test.reduced,idx_to_get, type = "binary")
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows an individual view of 'weightiness' for each feature in the model on a specific prediction</span>
+
+## Variable Impact on log-odds
+```{r plotting log-odds impact deaths}
+# Create scatter plot for the deaths feature where 'x' is the number of deaths and 'y' is impact on log-odds
+plot(test.reduced[,"deaths"], as.matrix(pred.breakdown[,"deaths"]), main="Impact on logg-odds (Deaths)", cex=0.4, pch=16, xlab = "number of Deaths", ylab = "impact on log-odds")
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows the correlation between deaths and impact on log-odds</span>
+
+```{r plotting log-odds impact assists}
+# Create scatter plot for the assists feature where 'x' is the number of assists and 'y' is impact on log-odds
+plot(test.reduced[,"assists"], as.matrix(pred.breakdown[,"assists"]), main="Impact on logg-odds (Assists)", cex=0.4, pch=16, xlab = "number of assists", ylab = "impact on log-odds")
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows the correlation between assists and impact on log-odds</span>
+
+```{r plotting log-odds impact kills}
+# Create scatter plot for the kills feature where 'x' is the number of kills and 'y' is impact on log-odds
+plot(test.reduced[,'kills'], as.matrix(pred.breakdown[,"kills"]), main="Impact on logg-odds (Kills)", cex=0.4, pch=16, xlab = "number of kills", ylab = "kills impact on log-odds")
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows the correlation between kills and impact on log-odds</span>
+
+```{r plotting log-odds actual vs predicted (deaths)}
+# Create scatter plot for the actual and predicted deaths feature where 'x' is both the actual(blue) and predicted(red) with 'y' being impact on log-odds
+clr <- c("blue","red")
+plot(test.reduced[,'deaths'], as.matrix(pred.breakdown[,"deaths"]),
+main="Actual vs Predicted logg-odds (Deaths)",
+xlab = "number of deaths",
+ylab="impact on logg-odds",
+type="p",col=clr,cex=0.4, pch=16)
+legend("topright",
+c("actual","predicted"),
+fill=clr)
+```
+
+<span style="text-align:center; font-weight:bold;">This plot shows the correlation between deaths and impact on log-odds, with the additional context of actual values vs predicted values impact.</span>
