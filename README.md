@@ -33,7 +33,7 @@ library(xgboostExplainer)
 
 ``` r
 # Raw Import
-dat<-read.csv("Allstatshead.csv", header=TRUE, sep=",")
+dat<-read.csv("res/data/Allstatshead.csv", header=TRUE, sep=",")
 
 # Subset data
 data.all <- subset(dat, select =c("win","player","item1","trinket","kills","deaths","assists","ownjunglekills","enemyjunglekills","visionscore","firstblood"))
@@ -106,7 +106,7 @@ tree.model = tree.cv$finalModel
 rpart.plot(tree.model,type = 2,extra = 7,fallen.leaves = T, main='Tree win probabilities') # extra = 7: the probability of the second class only. Useful for binary responses.
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20trees%201-1.png)<!-- -->
+![](res/figure-gfm/plotting%20trees%201-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">Plot showing the
 probability of win outcome at each node</span>
@@ -115,7 +115,7 @@ probability of win outcome at each node</span>
 rpart.plot(tree.model,type = 2,extra = 2,fallen.leaves = T, main='Tree classification rate') # extra = 2: display the classification rate at the node, expressed as the number of correct classifications and the number of observations in the node.
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20trees%202-1.png)<!-- -->
+![](res/figure-gfm/plotting%20trees%202-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">Plot showing the
 classification rate at each node</span>
@@ -203,7 +203,7 @@ gg <- xgb.ggplot.importance(importance_matrix, top_n = top_n_features, measure =
 gg + ggplot2::ylab("Importance")
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20importance%20matrix%20gain-1.png)<!-- -->
+![](res/figure-gfm/plotting%20importance%20matrix%20gain-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot will help
 us identify the most important predictive features</span>
@@ -214,7 +214,7 @@ gg <- xgb.ggplot.importance(importance_matrix, top_n = top_n_features, measure =
 gg + ggplot2::ylab("Frequency") + ggtitle('Feature frequency')
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20importance%20matrix%20frequency-1.png)<!-- -->
+![](res/figure-gfm/plotting%20importance%20matrix%20frequency-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows an
 arguably more accurate representation of the ‘weightiness’ of each
@@ -320,7 +320,7 @@ showWaterfall(xgb.model.reduced, explainer, xgb.test.data.reduced,test.reduced,i
     ##   ownjunglekills       firstblood        item11055
     ##     -0.148696027     -0.128740917     -0.048768889
 
-![](League_of_Legends_XGBoost/figure-gfm/creating%20waterfall%20chart-1.png)<!-- -->
+![](res/figure-gfm/creating%20waterfall%20chart-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows an
 individual view of ‘weightiness’ for each feature in the model on a
@@ -333,7 +333,7 @@ specific prediction</span>
 plot(test.reduced[,"deaths"], as.matrix(pred.breakdown[,"deaths"]), main="Impact on logg-odds (Deaths)", cex=0.4, pch=16, xlab = "number of Deaths", ylab = "impact on log-odds")
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20log-odds%20impact%20deaths-1.png)<!-- -->
+![](res/figure-gfm/plotting%20log-odds%20impact%20deaths-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows the
 correlation between deaths and impact on log-odds</span>
@@ -343,7 +343,7 @@ correlation between deaths and impact on log-odds</span>
 plot(test.reduced[,"assists"], as.matrix(pred.breakdown[,"assists"]), main="Impact on logg-odds (Assists)", cex=0.4, pch=16, xlab = "number of assists", ylab = "impact on log-odds")
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20log-odds%20impact%20assists-1.png)<!-- -->
+![](res/figure-gfm/plotting%20log-odds%20impact%20assists-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows the
 correlation between assists and impact on log-odds</span>
@@ -353,7 +353,7 @@ correlation between assists and impact on log-odds</span>
 plot(test.reduced[,'kills'], as.matrix(pred.breakdown[,"kills"]), main="Impact on logg-odds (Kills)", cex=0.4, pch=16, xlab = "number of kills", ylab = "kills impact on log-odds")
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20log-odds%20impact%20kills-1.png)<!-- -->
+![](res/figure-gfm/plotting%20log-odds%20impact%20kills-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows the
 correlation between kills and impact on log-odds</span>
@@ -371,7 +371,7 @@ c("actual","predicted"),
 fill=clr)
 ```
 
-![](League_of_Legends_XGBoost/figure-gfm/plotting%20log-odds%20actual%20vs%20predicted%20(deaths)-1.png)<!-- -->
+![](res/figure-gfm/plotting%20log-odds%20actual%20vs%20predicted%20(deaths)-1.png)<!-- -->
 
 <span style="text-align:center; font-weight:bold;">This plot shows the
 correlation between deaths and impact on log-odds, with the additional
