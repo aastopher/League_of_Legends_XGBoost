@@ -1,7 +1,9 @@
 League of Legends XGboost Model
 ================
-Aaron Stopher, Luke Moore, Kristoffer Sorensen
+Aaron Stopher, Luke Moore, Kristoffer Sorensen </br>
 2022-03-04
+
+DATA SOURCE: https://www.kaggle.com/paololol/league-of-legends-ranked-matches
 
 ## R Library Imports
 
