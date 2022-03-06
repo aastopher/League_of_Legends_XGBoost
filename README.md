@@ -4,6 +4,7 @@ Aaron Stopher, Luke Moore, Kristoffer Sorensen </br>
 2022-03-04
 
 DATA SOURCE: https://www.kaggle.com/paololol/league-of-legends-ranked-matches
+#### [Project Summary](./Summary.md)
 
 ## R Library Imports
 
@@ -378,5 +379,3 @@ fill=clr)
 <span style="text-align:center; font-weight:bold;">This plot shows the
 correlation between deaths and impact on log-odds, with the additional
 context of actual values vs predicted values impact.</span>
-
-![Summary](Summary.md)
